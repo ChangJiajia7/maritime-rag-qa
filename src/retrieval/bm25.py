@@ -37,6 +37,7 @@ class Chunk:
     chapter: str
     article_no: int
     text: str
+    source_loc: str = ""  # 生成侧引用用（jsonl 原值，如 "…(2021修订) 第一章 第一条"）
 
     @property
     def key(self) -> tuple[str, int]:
@@ -81,7 +82,7 @@ def load_corpus(raw_dir: str | None = None) -> list[Chunk]:
                 chunks.append(Chunk(
                     doc=r["doc"], doc_version=r.get("doc_version", ""),
                     chapter=r.get("chapter", ""), article_no=r["article_no"],
-                    text=r["text"],
+                    text=r["text"], source_loc=r.get("source_loc", ""),
                 ))
     return chunks
 
