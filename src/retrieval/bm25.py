@@ -103,39 +103,45 @@ class BM25Index:
                 df[w] = df.get(w, 0) + 1
         self.idf = {w: math.log((self.n - d + 0.5) / (d + 0.5) + 1.0) for w, d in df.items()}
 
-    def search(self, query: str, k: int = 5) -> list[Hit]:
+    def score_all(self, query: str) -> "np.ndarray":
+        """全库 BM25 分（长度 N），供混合融合（hybrid）使用。"""
+        import numpy as np
         q_toks = [w for w in tokenize(query) if w in self.idf]
+        scores = np.zeros(self.n, dtype=np.float64)
         if not q_toks:
-            return []
+            return scores
         q_counts: dict[str, int] = {}
         for w in q_toks:
             q_counts[w] = q_counts.get(w, 0) + 1
-        scores: list[float] = []
         for i, toks in enumerate(self.doc_tokens):
             dl = self.doc_lens[i]
-            s = 0.0
             if dl == 0:
-                scores.append(0.0)
                 continue
             tf: dict[str, int] = {}
             for w in toks:
                 tf[w] = tf.get(w, 0) + 1
+            acc = 0.0
             for w, qf in q_counts.items():
                 f = tf.get(w, 0)
                 if not f:
                     continue
-                s += self.idf[w] * (f * (self.k1 + 1)) / (
+                acc += self.idf[w] * (f * (self.k1 + 1)) / (
                     f + self.k1 * (1 - self.b + self.b * dl / self.avg_len)
                 )
-            scores.append(s)
-        ranked = sorted(range(self.n), key=lambda i: scores[i], reverse=True)
+            scores[i] = acc
+        return scores
+
+    def search(self, query: str, k: int = 5) -> list[Hit]:
+        import numpy as np
+        scores = self.score_all(query)
+        ranked = np.argsort(-scores)
         out: list[Hit] = []
-        for i in ranked:
+        for i in ranked.tolist():
             if scores[i] <= 0:
                 break
             c = self.chunks[i]
             out.append(Hit(doc=c.doc, article_no=c.article_no, chapter=c.chapter,
-                           score=scores[i], snippet=c.text[:70].replace("\n", " ")))
+                           score=float(scores[i]), snippet=c.text[:70].replace("\n", " ")))
             if len(out) >= k:
                 break
         return out

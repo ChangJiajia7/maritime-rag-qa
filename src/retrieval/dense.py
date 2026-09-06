@@ -133,17 +133,20 @@ class DenseIndex:
                                 score=float(sims[i, 0]), snippet=c.text[:70].replace("\n", " ")))
         return out
 
+    def sims_all(self, q_vec: "np.ndarray") -> "np.ndarray":
+        """全库余弦相似度（长度 N），供混合融合（hybrid）使用。"""
+        return (self.matrix @ q_vec.reshape(1, -1).T)[:, 0]
+
     def search_by_vector(self, q_vec: np.ndarray, k: int | None = None) -> list[DenseHit]:
         """已算好的 query 向量直接检索（评测批量复用）。"""
         k = k or self.top_k
-        q = q_vec.reshape(1, -1)
-        sims = self.matrix @ q.T
-        order = np.argsort(-sims[:, 0])[:k]
+        sims = self.sims_all(q_vec)
+        order = np.argsort(-sims)[:k]
         out: list[DenseHit] = []
-        for i in order:
+        for i in order.tolist():
             c = self.chunks[i]
             out.append(DenseHit(doc=c.doc, article_no=c.article_no, chapter=c.chapter,
-                                score=float(sims[i, 0]), snippet=c.text[:70].replace("\n", " ")))
+                                score=float(sims[i]), snippet=c.text[:70].replace("\n", " ")))
         return out
 
 
