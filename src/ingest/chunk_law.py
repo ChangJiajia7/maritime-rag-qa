@@ -42,6 +42,7 @@ _SEC_RE = re.compile(r"^第([一二三四五六七八九十百零]+)节")
 _NAME_MAP = {
     "law_mst_2021": "中华人民共和国海上交通安全法",
     "law_maritime_commerce_2025": "中华人民共和国海商法",
+    "law_inland_navigation_safety_2019": "中华人民共和国内河交通安全管理条例",
 }
 
 
