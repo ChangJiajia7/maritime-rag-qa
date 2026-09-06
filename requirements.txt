@@ -6,9 +6,11 @@ llama-index-core>=0.11
 llama-index-embeddings-huggingface>=0.3
 llama-index-vector-stores-chroma>=0.2
 chromadb>=0.5
-rank-bm25>=0.2.2
 sentence-transformers>=3.0
 torch>=2.2
+
+# 中文检索分词（BM25 稀疏检索自实现于 src/retrieval/bm25.py，不依赖 rank-bm25 包）
+jieba>=0.42
 
 # 文档解析
 pypdf>=4.0
