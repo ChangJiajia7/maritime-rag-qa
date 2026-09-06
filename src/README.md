@@ -2,9 +2,10 @@
 
 | 模块 | 职责 | 状态 |
 |---|---|---|
-| `ingest/` | PDF 清洗 → **条款感知分块**（按条款边界切，非固定窗口）→ Chroma 入库 | 🚧 TODO |
-| `retrieval/` | 向量(BGE-M3) + BM25 混合（权重 α）→ bge-reranker 重排；离线评测脚本出 recall@k / MRR | 🚧 TODO |
-| `generation/` | Qwen2.5-7B（API 优先 / Ollama 兜底）+ 强制出处提示词 + 引用后校验 + Gradio 前端 | 🚧 TODO |
-| `finetune/` | bge-small-zh-v1.5 + MultipleNegativesRankingLoss(InfoNCE) 微调；微调前后对比报告 | 🚧 TODO |
+| `ingest/` | 法规 docx/epub 清洗 → **条款感知分块** → JSONL（章/节/条 + source_loc） | ✅ 4 部法规 593 条（海商法310/海交法122/内河条例95/船员条例66），台账 data/SOURCES.md |
+| `retrieval/` | BM25 + 向量(BGE-M3) + 混合(α) + rerank；离线评测 recall@k / MRR | ✅ 四级基线跑通，最优 h@α0.5+rerank：recall@1=.975/MRR=.975（experiments/log.md） |
+| `generation/` | DeepSeek(硅基流动 V4-Flash) + 强制出处提示词 + [n] 引用 + 后校验 | ✅ qa.py 问答链路 / eval_generation.py G1G2（幻觉率 .30→0）/ Gradio UI src/app.py |
+| `app.py` | Web 问答界面（演示交付形态） | ✅ `python src/app.py` → http://127.0.0.1:7860 |
+| `finetune/` | bge-small-zh-v1.5 + MultipleNegativesRankingLoss 微调；前后对比 | 🚧 TODO（需先补标 train split） |
 
 > 开发纪律（沿用个人工程原则）：一次只改一个模块，跑通再下一个；每步增量提交；能简不繁——先跑通 baseline-1（纯 BM25）再谈混合。
