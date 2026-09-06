@@ -91,7 +91,8 @@ class LegalQA:
         ], temperature=temperature)
         return {"question": question, "answer": answer,
                 "hits": [{"n": it["n"], "source_loc": it["source_loc"],
-                          "article_no": it["article_no"], "doc": it["doc"]}
+                          "article_no": it["article_no"], "doc": it["doc"],
+                          "text": it["text"]}
                          for it in ctx]}
 
     def citations(self, resp: dict) -> list[str]:
