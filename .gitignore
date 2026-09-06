@@ -1,0 +1,31 @@
+# 数据合规：原始语料不入库（版权），仓库只保留清洗脚本与样例
+data/raw/
+data/*.pdf
+
+# 模型 / 向量库产物
+chroma/
+storage/
+models/*.bin
+*.ckpt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# API 密钥（真实 key 不入库；只提交 .env.example）
+.env
+.env.local
+.env.*
+!.env.example
+
+# 实验临时产物
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

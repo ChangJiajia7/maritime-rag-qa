@@ -1,0 +1,25 @@
+# maritime-rag-qa 依赖（装完跑 doctor 等价自检前先确认版本无冲突）
+# 说明：生成模型走 API（openai 兼容接口，DashScope/硅基流动均可），本地兜底用 Ollama，不进 pip。
+
+# 管道核心
+llama-index-core>=0.11
+llama-index-embeddings-huggingface>=0.3
+llama-index-vector-stores-chroma>=0.2
+chromadb>=0.5
+rank-bm25>=0.2.2
+sentence-transformers>=3.0
+torch>=2.2
+
+# 文档解析
+pypdf>=4.0
+pdfplumber>=0.11
+
+# 生成（API 优先）
+openai>=1.40
+
+# 前端
+gradio>=4.44
+
+# 评估 / 工具
+pandas>=2.0
+scikit-learn>=1.4
