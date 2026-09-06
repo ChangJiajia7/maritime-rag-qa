@@ -78,17 +78,34 @@ class LegalQA:
             for i, (_, c) in enumerate(hits)
         ]
 
-    def ask(self, question: str, temperature: float = 0.1) -> dict:
-        ctx = self._context(question)
+    def ask(self, question: str, history_msgs: list[dict] | None = None,
+            temperature: float = 0.1) -> dict:
+        """带检索的问答（G2）。history_msgs = 最近对话 [{"role","content"}]，
+        作上下文让 LLM 理解追问指代；参考条文始终在本轮最后给出。
+        追问查询扩展：本轮问题过短（疑似指代）时，拼接最近一次 user 问题再检索。"""
+        # —— 查询扩展：短追问拼上轮问题，保证检索不丢主题 ——
+        query = question.strip()
+        if history_msgs and len(query) < 12:
+            last_user = next((h["content"] for h in reversed(list(history_msgs))
+                              if h.get("role") == "user"), "")
+            if last_user:
+                query = f"{last_user[:60]} {query}"
+        ctx = self._context(query)
         blocks = []
         for it in ctx:
             blocks.append(f"[{it['n']}] {it['source_loc']}\n{it['text']}")
         user_msg = (f"【参考条文】\n" + "\n\n".join(blocks)
                     + f"\n\n【问题】{question}")
-        answer = _post_chat([
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ], temperature=temperature)
+
+        msgs: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if history_msgs:
+            for h in list(history_msgs)[-4:]:  # 保留最近 2 轮问答
+                content = (h.get("content") or "").strip()
+                if len(content) > 400:
+                    content = content[:400] + "…"
+                msgs.append({"role": h["role"], "content": content})
+        msgs.append({"role": "user", "content": user_msg})
+        answer = _post_chat(msgs, temperature=temperature)
         return {"question": question, "answer": answer,
                 "hits": [{"n": it["n"], "source_loc": it["source_loc"],
                           "article_no": it["article_no"], "doc": it["doc"],

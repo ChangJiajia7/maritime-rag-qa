@@ -2,6 +2,8 @@
 
 链路: 593 条款块(4部法规) → hybrid 检索 top5(α=0.7) → DeepSeek-V4-Flash(硅基流动)
       → 强制 [n] 引用 → 界面右侧展示引用条文出处，可核验。
+特性: 多轮追问上下文（保留最近 2 轮，参考条文每轮重新检索）、深色/浅色随系统、
+      清空对话按钮、示例问题一键填充。
 
 用法: python src/app.py   （浏览器打开 http://127.0.0.1:7860）
 """
@@ -24,6 +26,7 @@ from qa import LegalQA  # noqa: E402
 qa = LegalQA(method="hybrid", alpha=0.7, rerank=False, k=5)
 
 _CITE_RE = re.compile(r"\[(\d{1,2})\]")
+_META_RE = re.compile(r"\n\n_（检索.*?）_$")  # 尾注（检索耗时），喂回 LLM 前剥离
 
 EXAMPLES = [
     "客船能否同时载运乘客和危险货物？",
@@ -34,7 +37,7 @@ EXAMPLES = [
     "船长在航行中死亡，由谁代理其职务？",
 ]
 
-PLACEHOLDER = "输入海事法规问题（回车发送），例如：船员适任证书被吊销后多久不得重新申请？"
+PLACEHOLDER = "输入海事法规问题（回车发送）。支持追问，如先问「船员遣返费用由谁承担？」再问「包括哪些内容？」"
 
 
 def _ref_markdown(answer: str, hits: list[dict]) -> str:
@@ -53,6 +56,18 @@ def _ref_markdown(answer: str, hits: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _to_llm_history(history: list) -> list[dict]:
+    """把界面对话历史转成喂 LLM 的消息（剥尾注、不含本轮 user——本轮问题另行给出）。"""
+    out = []
+    for msg in history:
+        if msg.get("role") not in ("user", "assistant"):
+            continue
+        content = _META_RE.sub("", msg.get("content") or "")
+        if content.strip():
+            out.append({"role": msg["role"], "content": content.strip()})
+    return out[-4:]  # 最近 2 轮问答
+
+
 def answer(question: str, history: list) -> tuple:
     history = list(history or [])
     history.append({"role": "user", "content": question})
@@ -61,7 +76,8 @@ def answer(question: str, history: list) -> tuple:
         return history, "", "提问后此处显示引用条文与出处。"
     t0 = time.time()
     try:
-        resp = qa.ask(question.strip())
+        resp = qa.ask(question.strip(),
+                      history_msgs=_to_llm_history(history[:-1]))
         dt = time.time() - t0
         content = resp["answer"] + f"\n\n_（检索 593 条款块 top5 · 用时 {dt:.1f}s）_"
         history.append({"role": "assistant", "content": content})
@@ -72,22 +88,33 @@ def answer(question: str, history: list) -> tuple:
         return history, "", "请求失败，引用面板暂无可显示内容。"
 
 
+def clear_all() -> tuple:
+    return [], "提问后此处显示引用条文与出处。"
+
+
+THEME = gr.themes.Soft(primary_hue=gr.themes.colors.blue,
+                       neutral_hue=gr.themes.colors.gray)
+
+
 def build() -> gr.Blocks:
     with gr.Blocks(title="海事法规 RAG 问答") as demo:
         gr.Markdown(
             "# 海事法规 RAG 问答\n"
             "基于 4 部现行海事法规（**海商法 310 · 海交法 122 · 内河条例 95 · 船员条例 66 = 593 条**）"
-            "的条款级检索问答。回答**只依据检索到的条文**，句末 `[n]` 对应右侧引用出处，可逐条核验。"
+            "的条款级检索问答。回答**只依据检索到的条文**，句末 `[n]` 对应右侧引用出处，可逐条核验。\n"
+            "支持**多轮追问**：每轮自动重新检索相关条文，并保留最近两轮对话作为上下文。"
         )
         chatbot = gr.Chatbot(height=430, show_label=False, autoscroll=True)
         with gr.Row():
             with gr.Column(scale=5):
                 msg = gr.Textbox(placeholder=PLACEHOLDER, show_label=False,
                                  autofocus=True, lines=1)
-                msg.submit(answer, [msg, chatbot], [chatbot, msg])
+                clear_btn = gr.Button("清空对话", size="sm", variant="secondary")
                 gr.Examples(examples=EXAMPLES, inputs=msg, label="示例问题")
             with gr.Column(scale=4):
                 refs = gr.Markdown("提问后此处显示引用条文与出处。")
+        msg.submit(answer, [msg, chatbot], [chatbot, msg, refs])
+        clear_btn.click(clear_all, None, [chatbot, msg, refs])
     return demo
 
 
@@ -99,4 +126,5 @@ if __name__ == "__main__":
         print(f"索引就绪 {time.time()-t0:.1f}s，启动界面 …")
     except Exception as e:  # noqa: BLE001
         print(f"预热失败（不影响启动，提问时再试）: {e}")
-    build().queue().launch(server_name="127.0.0.1", server_port=7860, show_error=True)
+    build().queue().launch(server_name="127.0.0.1", server_port=7860,
+                           theme=THEME, show_error=True)
