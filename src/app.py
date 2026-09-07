@@ -1,11 +1,11 @@
 """海事法规 RAG 问答 —— Gradio Web 界面 v2（海事深蓝+金 品牌版）。
 
-链路: 593 条款块(4部法规) → hybrid 检索 top5(α=0.7) → DeepSeek-V4-Flash(硅基流动)
+链路: 641 条款块(5部法规) → hybrid 检索 top5(α=0.7) → DeepSeek-V4-Flash(硅基流动)
       → 强制 [n] 引用 → 右侧引用卡片（可折叠，出处可核验）。
 v2 定制（对应复试讲稿 §25-28' 可讲）：
-  - 品牌顶栏：深蓝渐变横幅 + 金色点缀 + 4 部法规徽章（不署名，保持中立）。
+  - 品牌顶栏：深蓝渐变横幅 + 金色点缀 + 5 部法规徽章（不署名，保持中立）。
   - 交互：多轮上下文轮数可调(0/1/2)；回答尾注带来源分布徽章(如 船员条例×3·海商法×2)；
-    示例问题按 4 部法规分组，点按填入回车发送（dataset.click 尽力自动发送，失败降级为填入）；
+    示例问题按法规分组，点按填入回车发送（dataset.click 尽力自动发送，失败降级为填入）；
     引用面板 = 原生 <details> 折叠卡片，首条展开、其余收起。
 用法: python src/app.py   （浏览器打开 http://127.0.0.1:7860）
 """
@@ -173,7 +173,7 @@ def answer(question: str, history: list, rounds: str) -> tuple:
         resp = qa.ask(question.strip(),
                       history_msgs=_to_llm_history(history[:-1], int(rounds or 2)))
         dt = time.time() - t0
-        footer = (f"\n\n_（检索 593 条款块 · top5：{_source_stats(resp['hits'])}"
+        footer = (f"\n\n_（检索 641 条款块 · top5：{_source_stats(resp['hits'])}"
                   f" · 用时 {dt:.1f}s）_")
         history.append({"role": "assistant",
                         "content": resp["answer"] + footer})
@@ -204,7 +204,8 @@ def build() -> gr.Blocks:
             '<span class="wb-badge">海交法 122 条</span>'
             '<span class="wb-badge">内河条例 95 条</span>'
             '<span class="wb-badge">船员条例 66 条</span>'
-            '<span class="wb-badge">合计 593 条款</span>'
+            '<span class="wb-badge">航道法 48 条</span>'
+            '<span class="wb-badge">合计 641 条款</span>'
             "</div></div>"
         )
         chatbot = gr.Chatbot(height=400, show_label=False, autoscroll=True,
