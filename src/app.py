@@ -131,15 +131,31 @@ def _refs_html(answer: str, hits: list[dict]) -> str:
     return "".join(parts)
 
 
+def _content_str(content) -> str:
+    """Chatbot 消息 content 兼容纯 str 与 gradio6 结构化列表
+    [{'text':..., 'type':'text'}, ...]（messages 格式回传为后者）。"""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for seg in content:
+            if isinstance(seg, str):
+                parts.append(seg)
+            elif isinstance(seg, dict):
+                parts.append(str(seg.get("text") or seg.get("content") or ""))
+        return "".join(parts)
+    return "" if content is None else str(content)
+
+
 def _to_llm_history(history: list, rounds: int) -> list[dict] | None:
-    """界面历史 -> 喂 LLM 的消息（剥尾注；rounds=0 返回 None=不带上下文）。"""
+    """界面历史 -> 喂 LLM 的消息（content 统一转 str 并剥尾注；rounds=0 返回 None）。"""
     if rounds <= 0:
         return None
     out = []
     for msg in history:
         if msg.get("role") not in ("user", "assistant"):
             continue
-        content = _META_RE.sub("", msg.get("content") or "")
+        content = _META_RE.sub("", _content_str(msg.get("content")))
         if content.strip():
             out.append({"role": msg["role"], "content": content.strip()})
     msgs = out[-(rounds * 2):]
@@ -162,7 +178,9 @@ def answer(question: str, history: list, rounds: str) -> tuple:
         history.append({"role": "assistant",
                         "content": resp["answer"] + footer})
         return history, "", _refs_html(resp["answer"], resp["hits"])
-    except Exception as e:  # noqa: BLE001 —— 界面要兜底显示
+    except Exception as e:  # noqa: BLE001 —— 界面兜底显示，同时打印 traceback 供服务端诊断
+        import traceback
+        traceback.print_exc()
         history.append({"role": "assistant",
                         "content": f"请求失败（{type(e).__name__}）：{e}"
                                    "\n\n请检查 .env 的 API 配置后重试。"})
