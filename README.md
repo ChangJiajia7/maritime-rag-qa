@@ -9,7 +9,7 @@
 
 | 环节 | 结果 |
 |---|---|
-| 语料 | 4 部现行海事法规 · **593 条款块**（条款级分块，source_loc 精确到 法/章/节/条） |
+| 语料 | 5 部现行海事法规 · **641 条款块**（条款级分块，source_loc 精确到 法/章/节/条） |
 | 检索最优 | 混合 α=0.5 + rerank：**recall@1 = 0.975 / MRR = 0.975**（40 题 test） |
 | 检索线上 | 混合 α=0.7（无 rerank）：recall@1 = 0.925 / MRR = 0.950 |
 | 生成 | G2 RAG+引用约束：正确率 **1.000** / 幻觉率 **0.000**（对照 G1 无约束 0.725 / 0.300） |
@@ -19,7 +19,7 @@
 
 1. **条款级分块**：每条法规按「第 X 条」边界切开（非 512 字固定窗口），每条块保留章/节归属与 `source_loc`——这是引用溯源与反幻觉的地基。
 2. **引用约束生成**：System prompt 强制「只能依据参考条文 + 句末 [n] 标注 + 未规定须明说」，幻觉率实验归零（见实验 C）。
-3. **轻量自研而非框架堆叠**：不用 LlamaIndex / Chroma / rank-bm25 包——检索管道全部自研（jieba + Okapi BM25、条款状态机分块、urllib 直连 API）。593 条款的小语料不需要向量库抽象，且每一行打分逻辑可向导师讲透。
+3. **轻量自研而非框架堆叠**：不用 LlamaIndex / Chroma / rank-bm25 包——检索管道全部自研（jieba + Okapi BM25、条款状态机分块、urllib 直连 API）。641 条款的小语料不需要向量库抽象，且每一行打分逻辑可向导师讲透。
 4. **评测闭环**：40 题固定考卷（每题标 golden 条款）→ 换方法重测同一套题 → recall@k / MRR / 幻觉率全部可比。
 5. **全 API 无本地模型**：嵌入/重排/生成全走硅基流动，向量缓存可重建，`.env` 三件套独立配置。
 6. **多轮追问不丢主题**：短问题（<12 字，如"包括哪些内容？"）自动拼接上一轮问题再检索，防指代漂移；保留最近 2 轮对话作 LLM 上下文（commit `73bf92d`，实测见 log.md D 表末条）。
@@ -27,10 +27,10 @@
 ## 架构
 
 ```
-4 部现行法规（docx/epub 官方文本）
+5 部现行法规（docx/epub/政府门户官方文本）
         │ 清洗：去网页注脚 URL / 版权横幅 / 空段
         ▼
-   条款感知分块（章/节/条状态机）──► data/*.jsonl（593 条款块，含 source_loc）
+   条款感知分块（章/节/条状态机）──► data/*.jsonl（641 条款块，含 source_loc）
         │                              ▲
         │                              │ 引用溯源
         ▼                              │
@@ -95,15 +95,19 @@
 
 ```bash
 # 0. 环境（Windows）
+# 日常运行：轻量环境（gradio + jieba + numpy，与 src/ 实际 import 一致）
 py -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
+
+# 重型环境（已隔离到 .venv-heavy）：torch/pandas/pypdf 等旧体积依赖仅在
+# 微调嵌入模型、原型探索时启用——.venv-heavy\Scripts\activate 后手动装对应包。
 
 # 1. 配置三件套 API key（LLM/EMBED/RERANK 各填一套；嵌入与重排用硅基流动）
 cp .env.example .env
 python src/api_smoke_test.py                    # 三件套连通自检 3/3
 
 # 2. 数据（已入库可直接用；重建走 src/ingest/*.py）
-ls data/*.jsonl                                 # 4 部法规 593 条款块
+ls data/*.jsonl                                 # 5 部法规 641 条款块
 
 # 3. 检索四级基线评测（每次换 --method / --alpha / --rerank）
 python src/retrieval/eval_retrieval.py --method bm25
@@ -123,7 +127,7 @@ python src/app.py                                # → http://127.0.0.1:7860
 
 ```
 maritime-rag-qa/
-├── data/            # 4 部法规 JSONL（条款块）+ SOURCES.md 溯源台账（raw/、cache/ 不入库）
+├── data/            # 5 部法规 JSONL（条款块）+ SOURCES.md 溯源台账（raw/、cache/ 不入库）
 ├── eval/            # 评估集 qa_eval_set.csv（40 条 test，golden 条款机器可查）
 ├── src/
 │   ├── ingest/      # docx/epub → txt → 条款感知 JSONL
@@ -137,10 +141,11 @@ maritime-rag-qa/
 ## 已知局限与下一步
 
 - **028 盲区**：检索无法区分「罚则条款 vs 行为条款」答非所问（题面与罚则用词重叠）；生成侧引用约束下仍能基于罚则给出正确事实——已作检索极限记录，下一步可做检索→生成联动校验。
-- **范围**：现覆盖 4 部国内现行法规；航海通告、SOLAS/MARPOL、裁判文书等语料未纳入（MaRAG 对标的扩展方向）。
+- **范围**：现覆盖 5 部国内现行法规；航海通告、SOLAS/MARPOL、裁判文书等语料未纳入（MaRAG 对标的扩展方向）。
 - **微调（experiments/log.md B 区 TODO）**：全 API 架构 + 检索已达 MRR .975，嵌入微调收益天花板明显；需先补标 train split，作为方法论扩展而非线上提升手段。
 - **模型口径**：G 系列数字用 DeepSeek 官方 `deepseek-chat` 得出（`.env.bak-deepseek-20260906` 可回退）；当前默认硅基流动 `deepseek-ai/DeepSeek-V4-Flash`，重跑 `eval_generation.py` 即可复现新口径。
 - **评测集**：test 40 条已冻结；train split 待标（微调前完成）。
+- **样本量口径**：G 系列（正确率 1.000 / 幻觉率 0.000）与检索数字均基于 40 题 × 641 条款的小样本，结果偏乐观；扩语料或换题面后指标可能回落，数字解读须带此口径（复试答辩建议主动说明）。
 
 ## License
 
