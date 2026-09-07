@@ -88,7 +88,7 @@ def load_corpus(raw_dir: str | None = None) -> list[Chunk]:
 
 
 class BM25Index:
-    """Okapi BM25。N≈593 条款块，直接全量打分即可。"""
+    """Okapi BM25。N≈600+ 条款块（641），直接全量打分即可。"""
 
     def __init__(self, chunks: list[Chunk], k1: float = _K1, b: float = _B):
         self.chunks = chunks
