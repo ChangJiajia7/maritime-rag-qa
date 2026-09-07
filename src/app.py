@@ -69,6 +69,11 @@ EXAMPLES = {
         "船员在船工作期间，用人单位应当为其缴纳什么保险？",
         "船员发证机构是哪级海事管理机构？",
     ],
+    "航道法": [
+        "禁止危害航道通航安全的行为有哪些？",
+        "在航道保护范围内采砂需要遵守什么规定？",
+        "在航道内倾倒垃圾会有什么法律后果？",
+    ],
 }
 
 PLACEHOLDER = ("输入海事法规问题（回车发送）。支持追问，如先问「船员遣返费用由谁承担？」"
@@ -222,12 +227,17 @@ def build() -> gr.Blocks:
                         value="2", label="多轮上下文", min_width=150)
                 gr.Markdown("**示例问题**（按法规分类，点按填入后回车发送）")
                 ex_list: list = []
-                with gr.Row():
-                    for law, qs in EXAMPLES.items():
-                        with gr.Column(min_width=130):
-                            ex = gr.Examples(label=law, examples=qs,
-                                             inputs=msg, examples_per_page=3)
-                            ex_list.append(ex)
+                # 5 组拆两行防横向溢出
+                for row_laws in (("海商法", "海交法", "内河条例"),
+                                 ("船员条例", "航道法")):
+                    with gr.Row():
+                        for law in row_laws:
+                            with gr.Column(min_width=140):
+                                ex = gr.Examples(label=law,
+                                                 examples=EXAMPLES[law],
+                                                 inputs=msg,
+                                                 examples_per_page=3)
+                                ex_list.append(ex)
             with gr.Column(scale=5):
                 refs = gr.HTML(REFS_PLACEHOLDER)
         # 示例点按自动问答（须在两栏组件都创建后再挂接）；若事件未触发，

@@ -1,27 +1,12 @@
-# maritime-rag-qa 依赖（装完跑 doctor 等价自检前先确认版本无冲突）
-# 说明：生成模型走 API（openai 兼容接口，DashScope/硅基流动均可），本地兜底用 Ollama，不进 pip。
-
-# 管道核心
-llama-index-core>=0.11
-llama-index-embeddings-huggingface>=0.3
-llama-index-vector-stores-chroma>=0.2
-chromadb>=0.5
-sentence-transformers>=3.0
-torch>=2.2
-
-# 中文检索分词（BM25 稀疏检索自实现于 src/retrieval/bm25.py，不依赖 rank-bm25 包）
-jieba>=0.42
-
-# 文档解析
-pypdf>=4.0
-pdfplumber>=0.11
-
-# 生成（API 优先）
-openai>=1.40
+# maritime-rag-qa 依赖（对齐 src/ 实际 import，与 README「轻量自研」卖点一致）
+# 说明：嵌入/重排/生成全走 HTTP API（urllib 直连，无需 OpenAI SDK）；语料解析用标准库 zipfile/xml；评测用 csv + 自研指标。
+# 遗留注意：老旧依赖清单曾含 llama-index/chroma/torch/pandas 等，均未在 src/ 中被 import，一律不装。
 
 # 前端
-gradio>=4.44
+gradio>=6.26
 
-# 评估 / 工具
-pandas>=2.0
-scikit-learn>=1.4
+# 中文检索分词（BM25 稀疏检索自实现于 src/retrieval/bm25.py，不依赖 rank-bm25 包）
+jieba>=0.42.1
+
+# 向量缓存与分数归一化（src/retrieval/dense.py · eval_retrieval.py）
+numpy>=2.0
