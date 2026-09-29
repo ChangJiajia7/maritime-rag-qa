@@ -53,7 +53,15 @@ RERANK = _api("RERANK", "BAAI/bge-reranker-v2-m3")
 # 注意：分块按「条」切（见 ingest/chunk_law.py），不使用 token 长度参数，
 # 故不存在 CHUNK_SIZE / CHUNK_OVERLAP —— 历史遗留的 512/64 已删除，避免误导。
 TOP_K = int(os.getenv("TOP_K", "5"))
-MIX_ALPHA = float(os.getenv("MIX_ALPHA", "0.7"))  # 线上最优，见 experiments/log.md A3
+MIX_ALPHA = float(os.getenv("MIX_ALPHA", "0.7"))  # 见 log A3；注入面包屑后 α=0.9 更优（log A16）
+
+# —— 检索文本的层级面包屑注入模式 ——
+# 法条脱离章节就成了孤儿（如罚则条款"违反本规定…处以罚款"看不到适用的行为条款）。
+# 注入章节归属让向量与 BM25 同时捕获主题。仅用于建索引；展示/引用仍用原 text。
+#   0 = 不注入（原文）
+#   1 = 【法规 > 章 > 第X条】+ 原文
+#   2 = 【章 > 第X条】+ 原文（去掉法规名，避免法名共享词面带来稀疏侧干扰）
+INDEX_BREADCRUMB = int(os.getenv("INDEX_BREADCRUMB", "1"))
 
 # 本地路径
 DATA_RAW = _ROOT / "data" / "raw"

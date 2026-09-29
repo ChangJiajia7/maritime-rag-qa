@@ -22,13 +22,17 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # src/
-from config import EMBED  # noqa: E402
+from config import EMBED, INDEX_BREADCRUMB  # noqa: E402
 from net import post_json  # noqa: E402
+from retrieval.bm25 import index_text  # noqa: E402
 
 _ROOT = Path(__file__).resolve().parents[2]
 CACHE_DIR = _ROOT / "data" / "cache"
-CACHE_NPY = CACHE_DIR / "dense_emb.npy"
-CACHE_KEYS = CACHE_DIR / "dense_emb.keys.json"
+# 语料缓存按面包屑模式分文件：切换 INDEX_BREADCRUMB 时互不污染，也无需重算。
+# mode 0 沿用历史文件名 dense_emb.*（与注入前完全等价，可直接复用既有缓存）。
+_m = "" if INDEX_BREADCRUMB == 0 else f"_m{INDEX_BREADCRUMB}"
+CACHE_NPY = CACHE_DIR / f"dense_emb{_m}.npy"
+CACHE_KEYS = CACHE_DIR / f"dense_emb{_m}.keys.json"
 QUERY_NPY = CACHE_DIR / "query_emb.npy"
 QUERY_KEYS = CACHE_DIR / "query_emb.keys.json"
 
@@ -133,7 +137,7 @@ def load_or_build(chunks, force: bool = False, quiet: bool = False) -> np.ndarra
             return m
         if not quiet:
             print("语料有变，重建嵌入缓存 …")
-    texts = [c.text for c in chunks]
+    texts = [index_text(c) for c in chunks]
     m = embed_texts(texts, quiet=quiet)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     np.save(CACHE_NPY, m)

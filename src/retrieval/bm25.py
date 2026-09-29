@@ -3,6 +3,7 @@
 - 语料: data/law_*.jsonl 全部条款块（doc / article_no / chapter / text）
 - 分词: jieba（词典加载在首次 import 时完成）
 - 检索: Okapi BM25（k1=1.5, b=0.75），整段条款 text 为一个"文档"
+- 面包屑: 索引文本按 config.INDEX_BREADCRUMB 注入「法规 > 章 > 第X条」归属
 - 用途: 与后续 向量(BGE-M3)/混合/rerank 链路对比的下限基线
 
 用法:
@@ -18,12 +19,16 @@ import glob
 import json
 import math
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import jieba
 
 _ROOT = Path(__file__).resolve().parents[2]  # 项目根
+sys.path.insert(0, str(_ROOT / "src"))
+from config import INDEX_BREADCRUMB  # noqa: E402
+
 _K1, _B = 1.5, 0.75
 
 # 纯噪声 token（法规文本里的框架词，不参与匹配）
@@ -42,6 +47,26 @@ class Chunk:
     @property
     def key(self) -> tuple[str, int]:
         return (self.doc, self.article_no)
+
+
+def index_text(c: Chunk, mode: int | None = None) -> str:
+    """检索用文本：按 mode 注入层级面包屑（见 config.INDEX_BREADCRUMB）。
+
+    法条脱离章节会成为孤儿——罚则条款只写"违反本规定…处以罚款"，看不到
+    它对应的行为条款。注入 章/条 归属后，向量与 BM25 都能捕获章节主题。
+
+    注意：仅用于**建索引**；展示与引用仍用 c.text 原文，避免引用里出现
+    我们自己拼的前缀。
+    """
+    m = INDEX_BREADCRUMB if mode is None else mode
+    if m == 0:
+        return c.text
+    parts = [f"第{c.article_no}条"]
+    if c.chapter:
+        parts.insert(0, c.chapter)
+    if m == 1 and c.doc:
+        parts.insert(0, c.doc)
+    return f"【{' > '.join(parts)}】{c.text}"
 
 
 @dataclass
@@ -94,7 +119,7 @@ class BM25Index:
         self.chunks = chunks
         self.k1, self.b = k1, b
         self.n = len(chunks)
-        self.doc_tokens: list[list[str]] = [tokenize(c.text) for c in chunks]
+        self.doc_tokens: list[list[str]] = [tokenize(index_text(c)) for c in chunks]
         self.doc_lens = [len(t) for t in self.doc_tokens]
         self.avg_len = sum(self.doc_lens) / max(self.n, 1)
         # df / idf
