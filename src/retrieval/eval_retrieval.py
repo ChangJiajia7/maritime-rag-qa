@@ -60,11 +60,11 @@ def run(method: str = "dense", alpha: float = 0.5, rerank: bool = False,
     # —— 构造各检索器的全库打分器 ——
     bm = BM25Index(chunks) if method in ("bm25", "hybrid") else None
     if method in ("dense", "hybrid"):
-        from retrieval.dense import DenseIndex, embed_texts, load_or_build
+        from retrieval.dense import DenseIndex, embed_queries, load_or_build
         mat = load_or_build(chunks)
         den = DenseIndex(chunks, mat)
-        print("批量嵌入 question …")
-        q_vecs = embed_texts([r["question"] for r in rows], quiet=True)
+        print("批量嵌入 question（带持久化缓存）…")
+        q_vecs = embed_queries([r["question"] for r in rows])
     else:
         den, q_vecs = None, None
 

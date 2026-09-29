@@ -20,6 +20,7 @@ import numpy as np
 _ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_ROOT / "src"))
 
+from config import MIX_ALPHA  # noqa: E402
 from retrieval.bm25 import BM25Index, load_corpus  # noqa: E402
 
 
@@ -31,7 +32,7 @@ def _minmax(x: np.ndarray) -> np.ndarray:
 
 
 class Retriever:
-    def __init__(self, method: str = "hybrid", alpha: float = 0.7,
+    def __init__(self, method: str = "hybrid", alpha: float = MIX_ALPHA,
                  rerank: bool = False):
         if method not in ("bm25", "dense", "hybrid"):
             raise ValueError(method)
@@ -64,8 +65,8 @@ class Retriever:
     def retrieve(self, query: str, k: int = 5) -> list[tuple[float, object]]:
         q_vec = None
         if self.method != "bm25":
-            from retrieval.dense import embed_texts
-            q_vec = embed_texts([query], quiet=True)[0]
+            from retrieval.dense import embed_queries
+            q_vec = embed_queries([query], quiet=True)[0]
         scores = self._scores(query, q_vec)
 
         cand_k = 20 if self.rerank else k

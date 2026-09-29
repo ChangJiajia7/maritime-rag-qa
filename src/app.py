@@ -22,12 +22,15 @@ from pathlib import Path
 import gradio as gr
 
 _ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "generation"))
 
+from config import MIX_ALPHA, TOP_K  # noqa: E402
 from qa import LegalQA  # noqa: E402
 
 # 线上最优链路：hybrid α=0.7（无 rerank 评测最优），top5
-qa = LegalQA(method="hybrid", alpha=0.7, rerank=False, k=5)
+# α / top_k 统一由 config 提供（.env 可覆盖），不再硬编码
+qa = LegalQA(method="hybrid", alpha=MIX_ALPHA, rerank=False, k=TOP_K)
 
 _CITE_RE = re.compile(r"\[(\d{1,2})\]")
 _META_RE = re.compile(r"\n\n_（检索.*?）_$")  # 尾注（来源徽章+耗时），喂回 LLM 前剥离

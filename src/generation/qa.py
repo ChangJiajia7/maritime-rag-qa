@@ -10,11 +10,9 @@
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -22,10 +20,9 @@ sys.path.insert(0, str(_ROOT / "src"))
 sys.path.insert(0, str(_ROOT / "src" / "retrieval"))
 
 from config import LLM  # noqa: E402
+from net import post_json  # noqa: E402
 from retrieval.retriever import Retriever  # noqa: E402
 
-_TIMEOUT = 120
-_RETRY = 2
 _CITE_RE = re.compile(r"\[(\d{1,2})\]")
 
 SYSTEM_PROMPT = (
@@ -39,26 +36,11 @@ SYSTEM_PROMPT = (
 
 def _post_chat(messages: list[dict], temperature: float = 0.1,
                max_tokens: int = 700) -> str:
-    url = f"{LLM.base}/chat/completions"
-    payload = {"model": LLM.model, "messages": messages,
-               "temperature": temperature, "max_tokens": max_tokens}
-    body = json.dumps(payload).encode("utf-8")
-    last_err: Exception | None = None
-    for _ in range(_RETRY + 1):
-        try:
-            req = urllib.request.Request(
-                url, data=body,
-                headers={"Content-Type": "application/json",
-                         "Authorization": f"Bearer {LLM.key}"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"].strip()
-        except Exception as e:  # noqa: BLE001
-            last_err = e
-            time.sleep(1.5)
-    raise RuntimeError(f"LLM API 失败: {last_err}")
+    data = post_json(f"{LLM.base}/chat/completions",
+                     {"model": LLM.model, "messages": messages,
+                      "temperature": temperature, "max_tokens": max_tokens},
+                     LLM.key, label="LLM")
+    return data["choices"][0]["message"]["content"].strip()
 
 
 class LegalQA:

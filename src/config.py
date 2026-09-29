@@ -49,14 +49,14 @@ LLM = _api("LLM", "deepseek-chat")
 EMBED = _api("EMBED", "BAAI/bge-m3")
 RERANK = _api("RERANK", "BAAI/bge-reranker-v2-m3")
 
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "512"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "64"))
+# —— 检索运行参数（app.py / Retriever 实际消费）——
+# 注意：分块按「条」切（见 ingest/chunk_law.py），不使用 token 长度参数，
+# 故不存在 CHUNK_SIZE / CHUNK_OVERLAP —— 历史遗留的 512/64 已删除，避免误导。
 TOP_K = int(os.getenv("TOP_K", "5"))
-MIX_ALPHA = float(os.getenv("MIX_ALPHA", "0.5"))
+MIX_ALPHA = float(os.getenv("MIX_ALPHA", "0.7"))  # 线上最优，见 experiments/log.md A3
 
 # 本地路径
 DATA_RAW = _ROOT / "data" / "raw"
-CHROMA_DIR = _ROOT / "chroma"
 
 
 def missing_keys() -> list[str]:
@@ -73,7 +73,7 @@ def summary() -> str:
         f"LLM   : {LLM.model} @ {LLM.base or '(未配置)'}",
         f"EMBED : {EMBED.model} @ {EMBED.base or '(未配置)'}",
         f"RERANK: {RERANK.model} @ {RERANK.base or '(未配置)'}",
-        f"chunk={CHUNK_SIZE}/{CHUNK_OVERLAP} top_k={TOP_K} alpha={MIX_ALPHA}",
+        f"检索  : 条款级分块（按「条」，非 token 窗口）  top_k={TOP_K} alpha={MIX_ALPHA}",
     ]
     return "\n".join(lines)
 

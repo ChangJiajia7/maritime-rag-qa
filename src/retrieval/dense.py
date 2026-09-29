@@ -4,6 +4,7 @@
 - 语料: data/law_*.jsonl 全部条款块（与 bm25.load_corpus 同序）
 - 存储: 归一化向量落盘 data/cache/dense_emb.npy + .keys.json（可重建，不入 git）
 - 检索: 余弦相似度（归一化后即点积）top-k
+- 查询缓存: 同一 query 的向量落盘 data/cache/query_emb.*，重复评测零 API 调用
 
 用法:
     from retrieval.dense import DenseIndex, load_or_build
@@ -14,10 +15,7 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
-import time
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,15 +23,16 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # src/
 from config import EMBED  # noqa: E402
+from net import post_json  # noqa: E402
 
 _ROOT = Path(__file__).resolve().parents[2]
 CACHE_DIR = _ROOT / "data" / "cache"
 CACHE_NPY = CACHE_DIR / "dense_emb.npy"
 CACHE_KEYS = CACHE_DIR / "dense_emb.keys.json"
+QUERY_NPY = CACHE_DIR / "query_emb.npy"
+QUERY_KEYS = CACHE_DIR / "query_emb.keys.json"
 
 _BATCH = 24          # 每请求最多文本数（硅基流动 bge-m3 兼容上限内）
-_TIMEOUT = 120
-_RETRY = 2
 
 
 @dataclass
@@ -47,26 +46,12 @@ class DenseHit:
 
 def _post_embeddings(texts: list[str]) -> list[list[float]]:
     """调用一次 /embeddings（输入非空校验由上层保证）。"""
-    url = f"{EMBED.base}/embeddings"
-    payload = {"model": EMBED.model, "input": texts, "encoding_format": "float"}
-    body = json.dumps(payload).encode("utf-8")
-    last_err: Exception | None = None
-    for _ in range(_RETRY + 1):
-        try:
-            req = urllib.request.Request(
-                url, data=body,
-                headers={"Content-Type": "application/json",
-                         "Authorization": f"Bearer {EMBED.key}"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            items = sorted(data["data"], key=lambda d: d["index"])
-            return [it["embedding"] for it in items]
-        except Exception as e:  # noqa: BLE001
-            last_err = e
-            time.sleep(1.5)
-    raise RuntimeError(f"embedding API 失败: {last_err}")
+    data = post_json(f"{EMBED.base}/embeddings",
+                     {"model": EMBED.model, "input": texts,
+                      "encoding_format": "float"},
+                     EMBED.key, label="Embedding", quiet=True)
+    items = sorted(data["data"], key=lambda d: d["index"])
+    return [it["embedding"] for it in items]
 
 
 def embed_texts(texts: list[str], quiet: bool = False) -> np.ndarray:
@@ -81,6 +66,55 @@ def embed_texts(texts: list[str], quiet: bool = False) -> np.ndarray:
         norms = np.linalg.norm(m, axis=1, keepdims=True)
         out.append(m / np.maximum(norms, 1e-9))
     return np.vstack(out) if out else np.zeros((0, 0), dtype=np.float32)
+
+
+# —— 查询嵌入持久化缓存 ——
+# 语料侧嵌入已由 load_or_build 缓存；但 query 侧原先每次都真调 API，
+# 导致 α 网格扫描时同一批问题被重复嵌入多次。此处按 query 原文缓存。
+_qcache: dict[str, np.ndarray] | None = None
+
+
+def _load_qcache() -> dict[str, np.ndarray]:
+    global _qcache
+    if _qcache is None:
+        _qcache = {}
+        if QUERY_NPY.exists() and QUERY_KEYS.exists():
+            try:
+                keys = json.loads(QUERY_KEYS.read_text(encoding="utf-8"))
+                mat = np.load(QUERY_NPY)
+                _qcache = {k: mat[i] for i, k in enumerate(keys) if i < len(mat)}
+            except Exception:  # noqa: BLE001 —— 缓存损坏则丢弃重建
+                _qcache = {}
+    return _qcache
+
+
+def _save_qcache(cache: dict[str, np.ndarray]) -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    keys = list(cache)
+    np.save(QUERY_NPY, np.vstack([cache[k] for k in keys]))
+    QUERY_KEYS.write_text(json.dumps(keys, ensure_ascii=False), encoding="utf-8")
+
+
+def embed_queries(texts: list[str], quiet: bool = False) -> np.ndarray:
+    """查询嵌入（带持久化缓存）：同一 query 只调一次 API。
+
+    返回矩阵行序与入参一致；与 embed_texts 同为已 L2 归一化的 float32。
+    """
+    cache = _load_qcache()
+    todo = [t for t in texts if t not in cache]
+    if todo:
+        if not quiet:
+            print(f"  查询嵌入: 缓存命中 {len(texts) - len(todo)}/{len(texts)}，"
+                  f"新调 {len(todo)} 条", flush=True)
+        vecs = embed_texts(todo, quiet=True)
+        for t, v in zip(todo, vecs):
+            cache[t] = v
+        _save_qcache(cache)
+    elif not quiet:
+        print(f"  查询嵌入: 全部命中缓存（{len(texts)} 条，零 API 调用）", flush=True)
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+    return np.vstack([cache[t] for t in texts])
 
 
 def _chunk_keys(chunks) -> list[str]:
@@ -118,7 +152,7 @@ class DenseIndex:
         self.top_k = top_k
 
     def _embed_query(self, query: str) -> np.ndarray:
-        vec = embed_texts([query], quiet=True)[0]
+        vec = embed_queries([query], quiet=True)[0]
         return vec.reshape(1, -1)
 
     def search(self, query: str, k: int | None = None) -> list[DenseHit]:
